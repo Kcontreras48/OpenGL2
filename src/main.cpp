@@ -19,15 +19,31 @@ std::string readShaderFile(const char* filePath) {
     return buffer.str();
 }
 
-// Función para ajustar el tamaño del renderizado si el usuario cambia el tamaño de la ventana
+// Función para ajustar el tamaño del renderizado
 void framebuffer_size_callback(GLFWwindow* window, int width, int height) {
     glViewport(0, 0, width, height);
 }
 
-// Función para manejar las entradas del teclado (ej: presionar ESC para cerrar)
-void processInput(GLFWwindow *window) {
-    if(glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
-        glfwSetWindowShouldClose(window, true);
+// Variables globales para el estado de las transformaciones
+float currentRotation = 0.0f;
+bool isScaled = false;
+bool isMoved = false;
+bool isInverted = false;
+
+// Manejo de las entradas del teclado
+void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods) {
+    if (action == GLFW_PRESS) {
+        if (key == GLFW_KEY_ESCAPE)
+            glfwSetWindowShouldClose(window, true);
+        if (key == GLFW_KEY_R)
+            currentRotation -= 90.0f; // Rotar 90 grados
+        if (key == GLFW_KEY_S)
+            isScaled = !isScaled;     // Alternar tamaño (agrandar/achicar)
+        if (key == GLFW_KEY_M)
+            isMoved = !isMoved;       // Alternar posición (mover/centrar)
+        if (key == GLFW_KEY_I)
+            isInverted = !isInverted; // Alternar inversión
+    }
 }
 
 int main() {
@@ -47,6 +63,7 @@ int main() {
     }
     glfwMakeContextCurrent(window);
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
+    glfwSetKeyCallback(window, key_callback);
 
     // 3. Cargar los punteros de OpenGL usando GLAD
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
@@ -86,7 +103,7 @@ int main() {
         -0.5f,  0.5f, 0.0f, // 2: Arriba Izquierda
          0.0f,  0.5f, 0.0f, // 3: Arriba Interior
          0.0f,  0.0f, 0.0f, // 4: Centro
-         0.5f,  0.0f, 0.0f  // 5: Derecha Arriba (punta horizontal)
+         0.5f,  0.0f, 0.0f  // 5: Derecha Arriba
     };
 
     // Usar "Indices" (EBO) para re-utilizar los vértices y formar 4 triángulos
@@ -120,15 +137,41 @@ int main() {
 
     // 4. Bucle principal de renderizado (Game Loop)
     while (!glfwWindowShouldClose(window)) {
-        // Entradas
-        processInput(window);
-
         // Renderizado: Limpiar la pantalla con un color sólido
         glClearColor(0.2f, 0.3f, 0.4f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
-        // Dibujar la 'L' usando los índices
+        // Activar el shader antes de pasar los uniforms
         glUseProgram(shaderProgram);
+
+        // --- Aplicar Transformaciones ---
+        glm::mat4 trans = glm::mat4(1.0f); // Matriz Identidad inicial
+
+        // 4. Efecto espejo vertical (I) en el centro de la pantalla
+        if (isInverted) {
+            trans = glm::scale(trans, glm::vec3(-1.0f, 1.0f, 1.0f)); // Invierte todo el universo en X
+        }
+
+        // 1. Traslación (M)
+        if (isMoved) {
+            trans = glm::translate(trans, glm::vec3(0.5f, 0.5f, 0.0f)); // Mover a la esquina
+        }
+
+        // 2. Rotación (R) en el eje Z
+        trans = glm::rotate(trans, glm::radians(currentRotation), glm::vec3(0.0f, 0.0f, 1.0f));
+
+        // 3. Escala (S)
+        if (isScaled) {
+            trans = glm::scale(trans, glm::vec3(1.5f, 1.5f, 1.5f)); // Agrandar al 150%
+        } else {
+            trans = glm::scale(trans, glm::vec3(1.0f, 1.0f, 1.0f)); // Tamaño normal (100%)
+        }
+
+        // Pasar la matriz 'trans' a nuestro uniform en el vertex shader
+        unsigned int transformLoc = glGetUniformLocation(shaderProgram, "transform");
+        glUniformMatrix4fv(transformLoc, 1, GL_FALSE, glm::value_ptr(trans));
+
+        // Dibujar la 'L' usando los índices
         glBindVertexArray(VAO);
         glDrawElements(GL_TRIANGLES, 12, GL_UNSIGNED_INT, 0); // Dibujar los 12 índices
 
