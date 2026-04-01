@@ -24,25 +24,10 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height) {
     glViewport(0, 0, width, height);
 }
 
-// Variables globales para el estado de las transformaciones
-float currentRotation = 0.0f;
-bool isScaled = false;
-bool isMoved = false;
-bool isInverted = false;
-
 // Manejo de las entradas del teclado
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods) {
-    if (action == GLFW_PRESS) {
-        if (key == GLFW_KEY_ESCAPE)
-            glfwSetWindowShouldClose(window, true);
-        if (key == GLFW_KEY_R)
-            currentRotation -= 90.0f; // Rotar 90 grados
-        if (key == GLFW_KEY_S)
-            isScaled = !isScaled;     // Alternar tamaño (agrandar/achicar)
-        if (key == GLFW_KEY_M)
-            isMoved = !isMoved;       // Alternar posición (mover/centrar)
-        if (key == GLFW_KEY_I)
-            isInverted = !isInverted; // Alternar inversión
+    if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {
+        glfwSetWindowShouldClose(window, true);
     }
 }
 
@@ -71,6 +56,9 @@ int main() {
         return -1;
     }
 
+    // Configurar OpenGL para 3D
+    glEnable(GL_DEPTH_TEST);
+
     // --- Configuración de Shaders y Buffers ---
     
     // Cargar y compilar el Vertex Shader
@@ -96,22 +84,29 @@ int main() {
     glDeleteShader(vertexShader);
     glDeleteShader(fragmentShader);
 
-    // Definir los vértices únicos de la 'L'
+    // Definir los 8 vértices únicos de un cubo 3D
     float vertices[] = {
-        -0.5f, -0.5f, 0.0f, // 0: Izquierda Abajo
-         0.5f, -0.5f, 0.0f, // 1: Derecha Abajo
-        -0.5f,  0.5f, 0.0f, // 2: Arriba Izquierda
-         0.0f,  0.5f, 0.0f, // 3: Arriba Interior
-         0.0f,  0.0f, 0.0f, // 4: Centro
-         0.5f,  0.0f, 0.0f  // 5: Derecha Arriba
+        // Cara Frontal (Z positivo)
+        -0.5f, -0.5f,  0.5f, // 0: Abajo-Izquierda
+         0.5f, -0.5f,  0.5f, // 1: Abajo-Derecha
+         0.5f,  0.5f,  0.5f, // 2: Arriba-Derecha
+        -0.5f,  0.5f,  0.5f, // 3: Arriba-Izquierda
+        
+        // Cara Trasera (Z negativo)
+        -0.5f, -0.5f, -0.5f, // 4: Abajo-Izquierda
+         0.5f, -0.5f, -0.5f, // 5: Abajo-Derecha
+         0.5f,  0.5f, -0.5f, // 6: Arriba-Derecha
+        -0.5f,  0.5f, -0.5f  // 7: Arriba-Izquierda
     };
 
-    // Usar "Indices" (EBO) para re-utilizar los vértices y formar 4 triángulos
+    // Usar "Indices" (EBO) para re-utilizar los vértices
     unsigned int indices[] = {
-        2, 0, 4, // Triángulo 1 (Parte del palo vertical)
-        2, 4, 3, // Triángulo 2 (Resto del palo vertical)
-        0, 1, 4, // Triángulo 3 (Parte baja del horizontal)
-        4, 1, 5  // Triángulo 4 (Punta derecha horizontal)
+        0, 1, 2,  2, 3, 0, // Cara Frontal
+        1, 5, 6,  6, 2, 1, // Cara Derecha
+        5, 4, 7,  7, 6, 5, // Cara Trasera
+        4, 0, 3,  3, 7, 4, // Cara Izquierda
+        4, 5, 1,  1, 0, 4, // Cara Inferior
+        3, 2, 6,  6, 7, 3  // Cara Superior
     };
 
     unsigned int VBO, VAO, EBO;
@@ -137,43 +132,38 @@ int main() {
 
     // 4. Bucle principal de renderizado (Game Loop)
     while (!glfwWindowShouldClose(window)) {
-        // Renderizado: Limpiar la pantalla con un color sólido
+        // Renderizado: Limpiar pantalla y buffer de profundidad
         glClearColor(0.2f, 0.3f, 0.4f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         // Activar el shader antes de pasar los uniforms
         glUseProgram(shaderProgram);
 
-        // --- Aplicar Transformaciones ---
-        glm::mat4 trans = glm::mat4(1.0f); // Matriz Identidad inicial
+        // --- Crear las matrices MVP (Model, View, Projection) ---
+        // 1. Modelo: Rotar continuamente el cubo para verlo en 3D
+        glm::mat4 model = glm::mat4(1.0f);
+        model = glm::rotate(model, (float)glfwGetTime() * glm::radians(50.0f), glm::vec3(0.5f, 1.0f, 0.0f));
 
-        // 4. Efecto espejo vertical (I) en el centro de la pantalla
-        if (isInverted) {
-            trans = glm::scale(trans, glm::vec3(-1.0f, 1.0f, 1.0f)); // Invierte todo el universo en X
-        }
+        // 2. Vista: Mover la "cámara" un poco hacia atrás
+        glm::mat4 view = glm::mat4(1.0f);
+        view = glm::translate(view, glm::vec3(0.0f, 0.0f, -3.0f));
 
-        // 1. Traslación (M)
-        if (isMoved) {
-            trans = glm::translate(trans, glm::vec3(0.5f, 0.5f, 0.0f)); // Mover a la esquina
-        }
+        // 3. Proyección: Dar perspectiva (FOV, Aspect Ratio, Near, Far)
+        glm::mat4 projection = glm::perspective(glm::radians(45.0f), 800.0f / 800.0f, 0.1f, 100.0f);
 
-        // 2. Rotación (R) en el eje Z
-        trans = glm::rotate(trans, glm::radians(currentRotation), glm::vec3(0.0f, 0.0f, 1.0f));
+        // Pasar las matrices al shader program
+        int modelLoc = glGetUniformLocation(shaderProgram, "model");
+        glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
+        
+        int viewLoc = glGetUniformLocation(shaderProgram, "view");
+        glUniformMatrix4fv(viewLoc, 1, GL_FALSE, glm::value_ptr(view));
+        
+        int projLoc = glGetUniformLocation(shaderProgram, "projection");
+        glUniformMatrix4fv(projLoc, 1, GL_FALSE, glm::value_ptr(projection));
 
-        // 3. Escala (S)
-        if (isScaled) {
-            trans = glm::scale(trans, glm::vec3(1.5f, 1.5f, 1.5f)); // Agrandar al 150%
-        } else {
-            trans = glm::scale(trans, glm::vec3(1.0f, 1.0f, 1.0f)); // Tamaño normal (100%)
-        }
-
-        // Pasar la matriz 'trans' a nuestro uniform en el vertex shader
-        unsigned int transformLoc = glGetUniformLocation(shaderProgram, "transform");
-        glUniformMatrix4fv(transformLoc, 1, GL_FALSE, glm::value_ptr(trans));
-
-        // Dibujar la 'L' usando los índices
+        // Dibujar el cubo usando sus 36 índices
         glBindVertexArray(VAO);
-        glDrawElements(GL_TRIANGLES, 12, GL_UNSIGNED_INT, 0); // Dibujar los 12 índices
+        glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, 0);
 
         // Intercambiar buffers y procesar eventos
         glfwSwapBuffers(window);
