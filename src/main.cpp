@@ -1,5 +1,8 @@
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
 #include <iostream>
 #include <fstream>
 #include <sstream>
@@ -36,7 +39,7 @@ int main() {
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
     // 2. Crear la ventana
-    GLFWwindow* window = glfwCreateWindow(800, 600, "Ventana Bonita", NULL, NULL);
+    GLFWwindow* window = glfwCreateWindow(800, 800, "Ventana Bonita", NULL, NULL);
     if (window == NULL) {
         std::cout << "Error: Fallo al crear la ventana de GLFW. ¿Tu GPU soporta OpenGL 4.6?" << std::endl;
         glfwTerminate();
@@ -76,22 +79,38 @@ int main() {
     glDeleteShader(vertexShader);
     glDeleteShader(fragmentShader);
 
-    // Definir los vértices del triángulo
+    // Definir los vértices únicos de la 'L'
     float vertices[] = {
-        -0.5f, -0.5f, 0.0f, // Izquierda
-         0.5f, -0.5f, 0.0f, // Derecha
-         0.0f,  0.5f, 0.0f  // Arriba
+        -0.5f, -0.5f, 0.0f, // 0: Izquierda Abajo
+         0.5f, -0.5f, 0.0f, // 1: Derecha Abajo
+        -0.5f,  0.5f, 0.0f, // 2: Arriba Izquierda
+         0.0f,  0.5f, 0.0f, // 3: Arriba Interior
+         0.0f,  0.0f, 0.0f, // 4: Centro
+         0.5f,  0.0f, 0.0f  // 5: Derecha Arriba (punta horizontal)
     };
 
-    unsigned int VBO, VAO;
+    // Usar "Indices" (EBO) para re-utilizar los vértices y formar 4 triángulos
+    unsigned int indices[] = {
+        2, 0, 4, // Triángulo 1 (Parte del palo vertical)
+        2, 4, 3, // Triángulo 2 (Resto del palo vertical)
+        0, 1, 4, // Triángulo 3 (Parte baja del horizontal)
+        4, 1, 5  // Triángulo 4 (Punta derecha horizontal)
+    };
+
+    unsigned int VBO, VAO, EBO;
     glGenVertexArrays(1, &VAO);
     glGenBuffers(1, &VBO);
+    glGenBuffers(1, &EBO); // Generar buffer de los indices
     
-    // Vincular y configurar VAO/VBO
+    // Vincular y configurar VAO/VBO/EBO
     glBindVertexArray(VAO);
     
     glBindBuffer(GL_ARRAY_BUFFER, VBO);
     glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+    
+    // Configurar EBO con los índices
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
     
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(0);
@@ -104,14 +123,14 @@ int main() {
         // Entradas
         processInput(window);
 
-        // Renderizado: Limpiar la pantalla con un color sólido (Ej: azul oscuro)
+        // Renderizado: Limpiar la pantalla con un color sólido
         glClearColor(0.2f, 0.3f, 0.4f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
-        // Dibujar el triángulo
+        // Dibujar la 'L' usando los índices
         glUseProgram(shaderProgram);
         glBindVertexArray(VAO);
-        glDrawArrays(GL_TRIANGLES, 0, 3);
+        glDrawElements(GL_TRIANGLES, 12, GL_UNSIGNED_INT, 0); // Dibujar los 12 índices
 
         // Intercambiar buffers y procesar eventos
         glfwSwapBuffers(window);
@@ -121,6 +140,7 @@ int main() {
     // 5. Limpiar y cerrar
     glDeleteVertexArrays(1, &VAO);
     glDeleteBuffers(1, &VBO);
+    glDeleteBuffers(1, &EBO);
     glDeleteProgram(shaderProgram);
 
     glfwTerminate();
