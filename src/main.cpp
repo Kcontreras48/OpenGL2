@@ -6,6 +6,7 @@
 #include <iostream>
 #include <fstream>
 #include <sstream>
+#include <cmath>
 
 // Función para leer un archivo de texto (shaders)
 std::string readShaderFile(const char* filePath) {
@@ -84,29 +85,35 @@ int main() {
     glDeleteShader(vertexShader);
     glDeleteShader(fragmentShader);
 
-    // Definir los 8 vértices únicos de un cubo 3D
+    // 1. Calcular la Proporción Áurea (Phi)
+    const float t = (1.0f + std::sqrt(5.0f)) / 2.0f;
+    const float s = 0.5f;   // Factor de escala
+    const float st = s * t; // Proporción áurea escalada
+
+    // 2. Definir los 12 vértices del Icosaedro centrados al origen, escalados por 's'
     float vertices[] = {
-        // Cara Frontal (Z positivo)
-        -0.5f, -0.5f,  0.5f, // 0: Abajo-Izquierda
-         0.5f, -0.5f,  0.5f, // 1: Abajo-Derecha
-         0.5f,  0.5f,  0.5f, // 2: Arriba-Derecha
-        -0.5f,  0.5f,  0.5f, // 3: Arriba-Izquierda
-        
-        // Cara Trasera (Z negativo)
-        -0.5f, -0.5f, -0.5f, // 4: Abajo-Izquierda
-         0.5f, -0.5f, -0.5f, // 5: Abajo-Derecha
-         0.5f,  0.5f, -0.5f, // 6: Arriba-Derecha
-        -0.5f,  0.5f, -0.5f  // 7: Arriba-Izquierda
+        -s,   st,  0.0f,
+         s,   st,  0.0f,
+        -s,  -st,  0.0f,
+         s,  -st,  0.0f,
+         
+         0.0f, -s,   st,
+         0.0f,  s,   st,
+         0.0f, -s,  -st,
+         0.0f,  s,  -st,
+         
+         st,  0.0f, -s,
+         st,  0.0f,  s,
+        -st,  0.0f, -s,
+        -st,  0.0f,  s
     };
 
-    // Usar "Indices" (EBO) para re-utilizar los vértices
+    // 3. EBO: Definir las 20 caras (triángulos) usando los índices
     unsigned int indices[] = {
-        0, 1, 2,  2, 3, 0, // Cara Frontal
-        1, 5, 6,  6, 2, 1, // Cara Derecha
-        5, 4, 7,  7, 6, 5, // Cara Trasera
-        4, 0, 3,  3, 7, 4, // Cara Izquierda
-        4, 5, 1,  1, 0, 4, // Cara Inferior
-        3, 2, 6,  6, 7, 3  // Cara Superior
+        0, 11, 5,   0, 5, 1,    0, 1, 7,    0, 7, 10,   0, 10, 11, // 5 caras alrededor del vértice 0
+        1, 5, 9,    5, 11, 4,  11, 10, 2,  10, 7, 6,    7, 1, 8,   // Caras adyacentes a las de arriba
+        3, 9, 4,    3, 4, 2,    3, 2, 6,    3, 6, 8,    3, 8, 9,   // 5 caras alrededor del vértice 3
+        4, 9, 5,    2, 4, 11,   6, 2, 10,   8, 6, 7,    9, 8, 1    // Caras adyacentes a las de abajo
     };
 
     unsigned int VBO, VAO, EBO;
@@ -161,9 +168,9 @@ int main() {
         int projLoc = glGetUniformLocation(shaderProgram, "projection");
         glUniformMatrix4fv(projLoc, 1, GL_FALSE, glm::value_ptr(projection));
 
-        // Dibujar el cubo usando sus 36 índices
+        // Dibujar el icosaedro usando sus 60 índices (20 triángulos * 3)
         glBindVertexArray(VAO);
-        glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, 0);
+        glDrawElements(GL_TRIANGLES, 60, GL_UNSIGNED_INT, 0);
 
         // Intercambiar buffers y procesar eventos
         glfwSwapBuffers(window);
